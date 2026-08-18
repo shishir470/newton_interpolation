@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Newton's Difference Interpolation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+  :root{
+    --bg: #1b241f;
+    --bg-soft: #212c26;
+    --chalk-dust: rgba(238,241,234,0.035);
+    --line: rgba(238,241,234,0.16);
+    --chalk: #eef1ea;
+    --chalk-dim: #a9b3ab;
+    --forward: #e8c468;
+    --forward-dim: rgba(232,196,104,0.18);
+    --backward: #7fc7d9;
+    --backward-dim: rgba(127,199,217,0.18);
+    --danger: #e08a86;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      repeating-linear-gradient(0deg, var(--chalk-dust) 0px, transparent 1px, transparent 3px),
+      repeating-linear-gradient(90deg, var(--chalk-dust) 0px, transparent 1px, transparent 3px),
+      radial-gradient(ellipse at 20% -10%, #26332c 0%, var(--bg) 55%);
+    color: var(--chalk);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding: 32px 18px 64px;
+  }
+  .wrap{max-width:880px;margin:0 auto;}
+  header{margin-bottom:28px;}
+  .eyebrow{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color: var(--chalk-dim); margin-bottom:8px;
+  }
+  h1{
+    font-family:'Fraunces',serif; font-weight:600; font-optical-sizing:auto;
+    font-size:clamp(28px,5vw,42px); margin:0 0 8px; letter-spacing:-0.01em;
+  }
+  header p{color:var(--chalk-dim); font-size:15px; max-width:56ch; line-height:1.5; margin:0;}
+
+  .panel{
+    background: var(--bg-soft);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:22px 24px;
+    margin-bottom:22px;
+  }
+  .panel h2{
+    font-family:'Fraunces',serif; font-weight:600; font-size:15px;
+    text-transform:uppercase; letter-spacing:.08em; color:var(--chalk-dim);
+    margin:0 0 16px;
+  }
+  .field-row{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:14px;}
+  .field{flex:1; min-width:220px;}
+  label{display:block; font-size:12.5px; color:var(--chalk-dim); margin-bottom:6px; font-family:'JetBrains Mono',monospace;}
+  input[type=text], input[type=number]{
+    width:100%; background:#151d18; border:1px solid var(--line); border-radius:6px;
+    color:var(--chalk); font-family:'JetBrains Mono',monospace; font-size:14.5px;
+    padding:10px 12px; outline:none; transition:border-color .15s;
+  }
+  input:focus{border-color:var(--forward);}
+
+  .method-row{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
+  .method-btn{
+    font-family:'JetBrains Mono',monospace; font-size:13px;
+    background:transparent; border:1px solid var(--line); color:var(--chalk-dim);
+    padding:8px 14px; border-radius:20px; cursor:pointer; transition:all .15s;
+  }
+  .method-btn.active{color:var(--bg); border-color:transparent; font-weight:700;}
+  .method-btn[data-m="auto"].active{background:var(--chalk);}
+  .method-btn[data-m="forward"].active{background:var(--forward);}
+  .method-btn[data-m="backward"].active{background:var(--backward);}
+
+  button.compute{
+    background:var(--chalk); color:var(--bg); border:none; border-radius:6px;
+    font-family:'Inter',sans-serif; font-weight:700; font-size:14.5px;
+    padding:11px 22px; cursor:pointer; letter-spacing:.02em;
+    transition:transform .12s, box-shadow .12s;
+  }
+  button.compute:hover{transform:translateY(-1px); box-shadow:0 4px 14px rgba(0,0,0,.35);}
+  button.compute:active{transform:translateY(0);}
+
+  .error{
+    color:var(--danger); font-family:'JetBrains Mono',monospace; font-size:13.5px;
+    background:rgba(224,138,134,0.08); border:1px solid rgba(224,138,134,0.35);
+    border-radius:6px; padding:10px 12px; margin-top:6px; display:none;
+  }
+
+  .badge{
+    display:inline-block; font-family:'JetBrains Mono',monospace; font-size:12px;
+    padding:4px 10px; border-radius:20px; margin-bottom:14px;
+  }
+  .badge.forward{background:var(--forward-dim); color:var(--forward);}
+  .badge.backward{background:var(--backward-dim); color:var(--backward);}
+
+  /* --- Difference table: staggered chalkboard pyramid --- */
+  .table-scroll{overflow-x:auto; padding-bottom:6px;}
+  #tableArea{position:relative; display:inline-block; min-width:100%;}
+  .columns{display:flex; gap:6px; padding:8px 4px 20px;}
+  .col{display:flex; flex-direction:column; gap:6px; min-width:78px;}
+  .col-head{
+    font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--chalk-dim);
+    text-align:center; height:20px; margin-bottom:2px;
+  }
+  .cell{
+    height:38px; display:flex; align-items:center; justify-content:center;
+    font-family:'JetBrains Mono',monospace; font-size:13.5px;
+    background:rgba(238,241,234,0.03); border:1px solid var(--line); border-radius:5px;
+    transition: background .2s, border-color .2s, transform .2s;
+  }
+  .cell.xcell{color:var(--chalk-dim); background:transparent; border-color:transparent; font-size:12.5px;}
+  .cell.hi{font-weight:700; transform:scale(1.04);}
+  .cell.hi-forward{background:var(--forward-dim); border-color:var(--forward); color:var(--forward);}
+  .cell.hi-backward{background:var(--backward-dim); border-color:var(--backward); color:var(--backward);}
+  svg#traceOverlay{position:absolute; top:0; left:0; pointer-events:none; overflow:visible;}
+
+  /* --- Working / formula section --- */
+  .katex-line{padding:10px 0; overflow-x:auto;}
+  .terms{font-family:'JetBrains Mono',monospace; font-size:13.5px; color:var(--chalk-dim); line-height:2;}
+  .terms .k{color:var(--chalk);}
+  .terms .running{color:var(--chalk);}
+
+  .result-box{
+    margin-top:20px; padding:20px 24px; border-radius:10px;
+    background:linear-gradient(135deg, rgba(232,196,104,0.07), rgba(127,199,217,0.05));
+    border:1px solid var(--line);
+    display:flex; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  .result-label{font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--chalk-dim);}
+  .result-value{
+    font-family:'Fraunces',serif; font-weight:700; font-size:34px;
+    position:relative; padding-bottom:8px;
+  }
+  .result-value::after, .result-value::before{
+    content:""; position:absolute; left:0; right:0; height:2px; background:var(--chalk);
+  }
+  .result-value::after{bottom:0;}
+  .result-value::before{bottom:-5px;}
+
+  footer{margin-top:30px; color:var(--chalk-dim); font-size:12.5px; font-family:'JetBrains Mono',monospace;}
+  footer a{color:var(--forward);}
+
+  @media (prefers-reduced-motion: reduce){
+    .cell, button.compute{transition:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Numerical Methods · Interpolation</div>
+    <h1>Newton's Difference Interpolation</h1>
+    <p>Enter an equally-spaced data table and a point to interpolate. The table is built once — forward reads the top of each column, backward reads the bottom.</p>
+  </header>
+
+  <div class="panel">
+    <h2>Data</h2>
+    <div class="field-row">
+      <div class="field">
+        <label for="xvals">x values (comma or space separated)</label>
+        <input type="text" id="xvals" value="1, 2, 3, 4, 5">
+      </div>
+      <div class="field">
+        <label for="yvals">y values</label>
+        <input type="text" id="yvals" value="1, 8, 27, 64, 125">
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field" style="max-width:220px;">
+        <label for="xtarget">Interpolate at x =</label>
+        <input type="number" id="xtarget" value="1.5" step="any">
+      </div>
+    </div>
+    <div class="method-row" id="methodRow">
+      <button class="method-btn active" data-m="auto">Auto</button>
+      <button class="method-btn" data-m="forward">Forward</button>
+      <button class="method-btn" data-m="backward">Backward</button>
+    </div>
+    <button class="compute" id="computeBtn">Compute ▸</button>
+    <div class="error" id="errorBox"></div>
+  </div>
+
+  <div class="panel" id="tablePanel" style="display:none;">
+    <h2>Finite difference table</h2>
+    <div id="methodBadge"></div>
+    <div class="table-scroll">
+      <div id="tableArea">
+        <div class="columns" id="columns"></div>
+        <svg id="traceOverlay"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="workingPanel" style="display:none;">
+    <h2>Working</h2>
+    <div class="katex-line" id="pLine"></div>
+    <div class="katex-line" id="formulaLine"></div>
+    <div class="terms" id="termsBox"></div>
+    <div class="result-box">
+      <span class="result-label">Interpolated value</span>
+      <span class="result-value" id="resultValue">—</span>
+    </div>
+  </div>
+
+  <footer>Works for any equally-spaced table — extend the data and recompute freely. · h = step size is validated automatically.</footer>
+</div>
+
+<script>
+function parseNums(str){
+  return str.trim().split(/[\s,]+/).filter(Boolean).map(Number);
+}
+
+function checkEquallySpaced(x, tol=1e-6){
+  if(x.length < 2) throw new Error("Need at least 2 data points.");
+  const h = x[1]-x[0];
+  if(Math.abs(h) < tol) throw new Error("Step size is ~0; x-values must be distinct.");
+  for(let i=1;i<x.length;i++){
+    const step = x[i]-x[i-1];
+    if(Math.abs(step-h) > tol){
+      throw new Error(`x-values are not equally spaced: step between x[${i-1}]=${x[i-1]} and x[${i}]=${x[i]} is ${step}, expected ${h}.`);
+    }
+  }
+  return h;
+}
+
+function differenceTable(y){
+  const n = y.length;
+  const table = [y.slice()];
+  for(let k=1;k<n;k++){
+    const prev = table[k-1];
+    const col = [];
+    for(let i=0;i<prev.length-1;i++) col.push(prev[i+1]-prev[i]);
+    table.push(col);
+  }
+  return table;
+}
+
+function factorial(n){let r=1; for(let i=2;i<=n;i++) r*=i; return r;}
+
+function polyProduct(p,k,sign){
+  let result = p;
+  for(let i=1;i<k;i++) result *= (p + sign*i);
+  return result;
+}
+
+function newtonForward(x,y,xt){
+  const h = checkEquallySpaced(x);
+  const table = differenceTable(y);
+  const n = y.length-1;
+  const p = (xt - x[0]) / h;
+  const terms = [];
+  let total = 0;
+  for(let k=0;k<=n;k++){
+    const d = table[k][0];
+    const coeff = k>0 ? polyProduct(p,k,-1)/factorial(k) : 1;
+    const term = coeff*d;
+    terms.push(term); total += term;
+  }
+  return {result:total, terms, p, table};
+}
+
+function newtonBackward(x,y,xt){
+  const h = checkEquallySpaced(x);
+  const table = differenceTable(y);
+  const n = y.length-1;
+  const p = (xt - x[n]) / h;
+  const terms = [];
+  let total = 0;
+  for(let k=0;k<=n;k++){
+    const d = table[k][table[k].length-1];
+    const coeff = k>0 ? polyProduct(p,k,1)/factorial(k) : 1;
+    const term = coeff*d;
+    terms.push(term); total += term;
+  }
+  return {result:total, terms, p, table};
+}
+
+function chooseMethod(x, xt){
+  const mid = (x[0]+x[x.length-1])/2;
+  return xt <= mid ? "forward" : "backward";
+}
+
+function fmt(n){
+  if(Object.is(n,-0)) n = 0;
+  return (Math.abs(n) < 1e-9) ? "0" : (Number.isInteger(n) ? n.toString() : n.toFixed(6).replace(/0+$/,'').replace(/\.$/,''));
+}
+
+let currentMethod = "auto";
+document.querySelectorAll(".method-btn").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".method-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    currentMethod = btn.dataset.m;
+  });
+});
+
+function showError(msg){
+  const box = document.getElementById("errorBox");
+  box.textContent = msg;
+  box.style.display = msg ? "block" : "none";
+}
+
+function renderTable(x, table, method){
+  const columns = document.getElementById("columns");
+  columns.innerHTML = "";
+  const n = table.length;
+  const cellH = 38, gap = 6;
+
+  // x/y first column is table[0] paired with x; remaining are difference columns
+  const headers = ["x"].concat(["y"], Array.from({length:n-1}, (_,i)=>`Δ<sup>${i+1}</sup>y`));
+
+  // x column (never staggered, always full height, not highlighted)
+  const xCol = document.createElement("div");
+  xCol.className = "col";
+  xCol.innerHTML = `<div class="col-head">x</div>`;
+  x.forEach(v=>{
+    const c = document.createElement("div");
+    c.className = "cell xcell";
+    c.textContent = fmt(v);
+    xCol.appendChild(c);
+  });
+  columns.appendChild(xCol);
+
+  const highlightCells = []; // {el, colIndex}
+  for(let k=0;k<n;k++){
+    const col = document.createElement("div");
+    col.className = "col";
+    const label = k===0 ? "y" : `Δ<sup>${k}</sup>y`;
+    col.innerHTML = `<div class="col-head">${label}</div>`;
+    col.style.marginTop = (k * (cellH+gap)/2) + "px";
+    table[k].forEach((v, i)=>{
+      const c = document.createElement("div");
+      c.className = "cell";
+      c.textContent = fmt(v);
+      col.appendChild(c);
+    });
+    columns.appendChild(col);
+
+    // decide which cell in this column is on the active diagonal
+    const cellsInCol = col.querySelectorAll(".cell");
+    let idx;
+    if(method === "forward"){
+      idx = 0; // top of column = Delta^k y0
+    } else {
+      idx = cellsInCol.length - 1; // bottom of column = Delta^k y_(n-k) = nabla^k yn
+    }
+    const target = cellsInCol[idx];
+    target.classList.add("hi", method === "forward" ? "hi-forward" : "hi-backward");
+    highlightCells.push(target);
+  }
+
+  // draw chalk trace line connecting highlighted cells
+  requestAnimationFrame(()=>{
+    const svg = document.getElementById("traceOverlay");
+    const areaRect = document.getElementById("tableArea").getBoundingClientRect();
+    const w = document.getElementById("columns").scrollWidth;
+    const h = document.getElementById("columns").scrollHeight;
+    svg.setAttribute("width", w);
+    svg.setAttribute("height", h);
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.innerHTML = "";
+
+    const pts = highlightCells.map(el=>{
+      const r = el.getBoundingClientRect();
+      return [ r.left - areaRect.left + r.width/2, r.top - areaRect.top + r.height/2 ];
+    });
+    if(pts.length > 1){
+      let d = `M ${pts[0][0]} ${pts[0][1]}`;
+      for(let i=1;i<pts.length;i++) d += ` L ${pts[i][0]} ${pts[i][1]}`;
+      const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d", d);
+      path.setAttribute("fill","none");
+      path.setAttribute("stroke", method==="forward" ? "#e8c468" : "#7fc7d9");
+      path.setAttribute("stroke-width","2");
+      path.setAttribute("stroke-dasharray","6 5");
+      path.setAttribute("stroke-linecap","round");
+      path.setAttribute("opacity","0.85");
+      const len = path.getTotalLength ? 2000 : 0;
+      path.style.strokeDashoffset = "600";
+      path.style.transition = "stroke-dashoffset 900ms ease-out";
+      svg.appendChild(path);
+      requestAnimationFrame(()=>{ path.style.strokeDashoffset = "0"; });
+    }
+  });
+}
+
+function renderWorking(method, p, terms, xtarget, x){
+  const n = terms.length - 1;
+  const pLine = document.getElementById("pLine");
+  const formulaLine = document.getElementById("formulaLine");
+
+  const pExpr = method === "forward"
+    ? `p = \\dfrac{x - x_0}{h} = \\dfrac{${fmt(xtarget)} - ${fmt(x[0])}}{h} = ${fmt(p)}`
+    : `p = \\dfrac{x - x_n}{h} = \\dfrac{${fmt(xtarget)} - ${fmt(x[x.length-1])}}{h} = ${fmt(p)}`;
+  katex.render(pExpr, pLine, {throwOnError:false, displayMode:true});
+
+  const generalForward = `y(x) = y_0 + p\\,\\Delta y_0 + \\dfrac{p(p-1)}{2!}\\Delta^2 y_0 + \\dfrac{p(p-1)(p-2)}{3!}\\Delta^3 y_0 + \\cdots`;
+  const generalBackward = `y(x) = y_n + p\\,\\nabla y_n + \\dfrac{p(p+1)}{2!}\\nabla^2 y_n + \\dfrac{p(p+1)(p+2)}{3!}\\nabla^3 y_n + \\cdots`;
+  katex.render(method === "forward" ? generalForward : generalBackward, formulaLine, {throwOnError:false, displayMode:true});
+
+  const termsBox = document.getElementById("termsBox");
+  termsBox.innerHTML = "";
+  let running = 0;
+  terms.forEach((t,k)=>{
+    running += t;
+    const line = document.createElement("div");
+    line.innerHTML = `<span class="k">term ${k}</span> = ${fmt(t)}   →   <span class="running">running total = ${fmt(running)}</span>`;
+    termsBox.appendChild(line);
+  });
+
+  document.getElementById("resultValue").textContent = fmt(running);
+}
+
+document.getElementById("computeBtn").addEventListener("click", ()=>{
+  showError("");
+  document.getElementById("tablePanel").style.display = "none";
+  document.getElementById("workingPanel").style.display = "none";
+
+  let x, y, xt;
+  try{
+    x = parseNums(document.getElementById("xvals").value);
+    y = parseNums(document.getElementById("yvals").value);
+    xt = parseFloat(document.getElementById("xtarget").value);
+    if(x.length !== y.length){
+      throw new Error(`Mismatched lengths: ${x.length} x-values vs ${y.length} y-values.`);
+    }
+    if(x.length < 2){
+      throw new Error("Enter at least 2 data points.");
+    }
+    if(Number.isNaN(xt)){
+      throw new Error("Enter a valid numeric target x.");
+    }
+  }catch(e){
+    showError(e.message);
+    return;
+  }
+
+  let method = currentMethod;
+  const badge = document.getElementById("methodBadge");
+  try{
+    if(method === "auto"){
+      method = chooseMethod(x, xt);
+    }
+    const out = method === "forward" ? newtonForward(x,y,xt) : newtonBackward(x,y,xt);
+
+    badge.innerHTML = `<span class="badge ${method}">${method === "forward" ? "▸ forward difference (near start)" : "◂ backward difference (near end)"}${currentMethod==="auto" ? " · auto-selected" : ""}</span>`;
+
+    document.getElementById("tablePanel").style.display = "block";
+    document.getElementById("workingPanel").style.display = "block";
+    renderTable(x, out.table, method);
+    renderWorking(method, out.p, out.terms, xt, x);
+  }catch(e){
+    showError(e.message);
+  }
+});
+
+// compute once on load with the default example
+document.getElementById("computeBtn").click();
+</script>
+</body>
+</html>
